@@ -99,6 +99,14 @@ int sys_shutdown(void)
   return 0;
 }
 
+extern int race_condition;
+int sys_fork_winner(void){
+	if (argint(0, &race_condition) < 0){
+		cprintf("failed\n");
+	}
+	return 0;
+}
+
 extern int sched_trace_enabled;
 extern int sched_trace_counter;
 int sys_enable_sched_trace(void)
