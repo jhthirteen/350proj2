@@ -120,3 +120,44 @@ int sys_enable_sched_trace(void)
 
   return 0;
 }
+
+int
+sys_tickets_owned(void) {
+    int pid;
+
+    // Retrieve the process ID from the arguments
+    if (argint(0, &pid) < 0)
+        return -1;
+
+    // Call the kernel-side function
+    return tickets_owned(pid);
+}
+
+int
+sys_set_sched(void) {
+    int scheduler;
+
+    // Retrieve the scheduler type from the arguments
+    if (argint(0, &scheduler) < 0)
+        return -1;
+
+    // Call the kernel-side function
+    set_sched(scheduler);
+
+    return 0;
+}
+
+
+int
+sys_transfer_tickets(void)
+{
+    int pid, tickets;
+
+    // Retrieve the process ID and the number of tickets from user space
+    if (argint(0, &pid) < 0 || argint(1, &tickets) < 0)
+        return -1;
+
+    // Call the kernel function defined in proc.c
+    return transfer_tickets(pid, tickets);
+}
+

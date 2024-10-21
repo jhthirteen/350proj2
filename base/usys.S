@@ -32,3 +32,7 @@ SYSCALL(uptime)
 SYSCALL(shutdown)
 SYSCALL(enable_sched_trace)
 SYSCALL(fork_winner)
+SYSCALL(transfer_tickets)
+SYSCALL(set_sched)
+SYSCALL(tickets_owned)
+

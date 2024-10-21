@@ -8,7 +8,8 @@
 #define STUB_FUNCS
 #ifdef STUB_FUNCS
 //void fork_winner(int winner) {}
-void set_sched(int scheduler) {}
+//int set_sched(int scheduler) {}
+
 #endif
 
 /* IMPORTANT INSTRUCTION: the test code below should not be changed. 

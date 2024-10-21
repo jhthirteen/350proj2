@@ -376,9 +376,36 @@ get_tickets(int pid){
 }
 
 int
-transfer(int pid, int tickets){
+tickets_owned(int pid) {
+    struct proc *p;
+
+    acquire(&ptable.lock);
+
+    // Find the process by pid
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if (p->pid == pid) {
+            release(&ptable.lock);
+            return p->tickets;  // Return the number of tickets the process owns
+        }
+    }
+
+    release(&ptable.lock);
+    return -1;  // If no such process is found
+}
+
+void
+set_sched(int scheduler) {
+    // Assume there's a global variable to track the scheduler type
+    extern int current_scheduler;
+    current_scheduler = scheduler;  // Set the scheduler type (0 for RR, 1 for stride)
+}
+
+
+int
+transfer_tickets(int pid, int tickets){
+
 	if( tickets < 0 ){
-		return -1;
+		return -1;   // Invalid ticket amount
 	}
 	
 	struct proc *curproc = myproc();
@@ -387,28 +414,37 @@ transfer(int pid, int tickets){
 	
 	acquire(&ptable.lock);
 	
-	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-		if(p->pid == pid){
-			transferp = p;
-		}
-	}
-	
+  // Find the recipient process by pid
+	for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->pid == pid) {
+        transferp = p;
+        break;  // Exit loop when recipient is found
+    }
+  }
+
+	// If recipient process is not found
 	if( transferp == NULL ){
 		release(&ptable.lock);
-		return -3;
+		return -3;  // Recipient process does not exist
 	}
 	
+   // Check if the calling process has enough tickets to transfer
 	if( tickets > (curproc->tickets -1) ){
 		release(&ptable.lock);
-		return -2;
+		return -2;   // Not enough tickets to transfer
 	}
 	
+  // Perform the ticket transfer
 	curproc->tickets = curproc->tickets - tickets;
 	curproc->stride = (STRIDE_TOTAL_TICKETS*10) / curproc->tickets;
-	transferp->tickets = transferp->tickets + tickets;
+	
+  transferp->tickets = transferp->tickets + tickets;
 	transferp->stride = (STRIDE_TOTAL_TICKETS*10) / transferp->tickets;
-	release(&ptable.lock);
-	return curproc->tickets;
+	
+  release(&ptable.lock);
+	
+  // Return the remaining tickets of the calling process
+  return curproc->tickets;
 }
 
 //PAGEBREAK: 42
