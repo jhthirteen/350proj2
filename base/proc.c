@@ -393,12 +393,12 @@ tickets_owned(int pid) {
     return -1;  // If no such process is found
 }
 
-void
-set_sched(int scheduler) {
+//void
+//set_sched(int scheduler) {
     // Assume there's a global variable to track the scheduler type
-    extern int current_scheduler;
-    current_scheduler = scheduler;  // Set the scheduler type (0 for RR, 1 for stride)
-}
+    //extern int current_scheduler;
+    //current_scheduler = scheduler;  // Set the scheduler type (0 for RR, 1 for stride)
+//}
 
 
 int

@@ -133,16 +133,17 @@ sys_tickets_owned(void) {
     return tickets_owned(pid);
 }
 
+extern int scheduler_choice;
 int
 sys_set_sched(void) {
     int scheduler;
 
     // Retrieve the scheduler type from the arguments
-    if (argint(0, &scheduler) < 0)
+    if (argint(0, &scheduler_choice) < 0)
         return -1;
 
     // Call the kernel-side function
-    set_sched(scheduler);
+    //set_sched(scheduler);
 
     return 0;
 }
