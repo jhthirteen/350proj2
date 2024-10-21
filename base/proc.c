@@ -6,6 +6,9 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include <stddef.h>
+
+#define STRIDE_TOTAL_TICKETS 100
 
 struct {
   struct spinlock lock;
@@ -217,6 +220,25 @@ fork(void)
 
   acquire(&ptable.lock);
   np->state = RUNNABLE;
+  struct proc *p;
+  int num_processes = 0;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	if(p->state == RUNNABLE || p->state == RUNNING){
+  		num_processes++;
+  	}
+  }
+  
+  int ticket_p = STRIDE_TOTAL_TICKETS / num_processes;
+  int stride_p = (STRIDE_TOTAL_TICKETS*10) / ticket_p;
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	if(p->state == RUNNABLE || p->state == RUNNING){ //reset ticketing
+  		p->stride = stride_p;
+  		p->pass = 0;
+  		p->tickets = ticket_p;
+  	}
+  }
+  
   release(&ptable.lock);
   
   if( race_condition == 1 ){
@@ -268,6 +290,25 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  
+  int num_processes = 0;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	if(p->state == RUNNABLE){
+  		num_processes++;
+  	}
+  }
+  
+  int ticket_p = STRIDE_TOTAL_TICKETS / num_processes;
+  int stride_p = (STRIDE_TOTAL_TICKETS*10) / ticket_p;
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  	if(p->state == RUNNABLE){ //reset ticketing
+  		p->stride = stride_p;
+  		p->pass = 0;
+  		p->tickets = ticket_p;
+  	}
+  }
+  
   sched();
   panic("zombie exit");
 }
@@ -316,6 +357,60 @@ wait(void)
   }
 }
 
+int
+get_tickets(int pid){
+	struct proc *p;
+	
+	acquire(&ptable.lock);
+	
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+		if(p->pid == pid){
+			int t_owned = p->tickets;
+			release(&ptable.lock);
+			return t_owned;
+		}
+	}
+	
+	release(&ptable.lock);
+	return 0;
+}
+
+int
+transfer(int pid, int tickets){
+	if( tickets < 0 ){
+		return -1;
+	}
+	
+	struct proc *curproc = myproc();
+	struct proc *transferp = NULL;
+	struct proc *p;
+	
+	acquire(&ptable.lock);
+	
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+		if(p->pid == pid){
+			transferp = p;
+		}
+	}
+	
+	if( transferp == NULL ){
+		release(&ptable.lock);
+		return -3;
+	}
+	
+	if( tickets > (curproc->tickets -1) ){
+		release(&ptable.lock);
+		return -2;
+	}
+	
+	curproc->tickets = curproc->tickets - tickets;
+	curproc->stride = (STRIDE_TOTAL_TICKETS*10) / curproc->tickets;
+	transferp->tickets = transferp->tickets + tickets;
+	transferp->stride = (STRIDE_TOTAL_TICKETS*10) / transferp->tickets;
+	release(&ptable.lock);
+	return curproc->tickets;
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -324,6 +419,8 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
+int scheduler_choice;
 void
 scheduler(void)
 {
@@ -336,7 +433,7 @@ scheduler(void)
   for(;;){
     // Enable interrupts on this processor.
     sti();
-
+    if( scheduler_choice == 0 ){
         // Loop over process table looking for process to run.
         acquire(&ptable.lock);
         ran = 0;
@@ -359,7 +456,49 @@ scheduler(void)
           // Process is done running for now.
           // It should have changed its p->state before coming back.
           c->proc = 0;
+    	}
+
     }
+    
+    else{
+    	struct proc *min = NULL;
+    	acquire(&ptable.lock);
+    	ran = 0;
+    	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    		if(p->state != RUNNABLE){
+    			continue;
+    		}
+    		if( min == NULL ){
+    			min = p;
+    			ran = 1;
+    			continue;
+    		}
+    		if( p->pass < min->pass ){
+    			min = p;
+    			ran = 1;
+    			continue;
+    		}
+    		else if( p->pass == min->pass ){
+    			if(p->pid < min->pid){
+    				min = p;
+    				ran = 1;
+    				continue;
+    			}
+    		}
+    	}
+    	
+    	if( min != NULL ){
+    		min->pass = min->pass + min->stride;
+    		c->proc = min;
+    		switchuvm(min);
+    		min->state = RUNNING;
+    		
+    		swtch(&(c->scheduler), min->context);
+    		switchkvm();
+    		c->proc = 0;
+    	}
+    }
+    
     release(&ptable.lock);
 
     if (ran == 0){
